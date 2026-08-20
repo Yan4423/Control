@@ -1,0 +1,8 @@
+build/
+_codex_backups/
+.settings/
+Src/main.before_*.c
+mx.scratch
+*.log
+Thumbs.db
+.DS_Store
