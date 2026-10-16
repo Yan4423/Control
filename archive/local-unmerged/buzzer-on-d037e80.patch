@@ -1,0 +1,224 @@
+diff --git a/Src/main.c b/Src/main.c
+index b553891..8c984d4 100644
+--- a/Src/main.c
++++ b/Src/main.c
+@@ -31,6 +31,15 @@
+ 
+ /* Private typedef -----------------------------------------------------------*/
+ /* USER CODE BEGIN PTD */
++typedef enum
++{
++  BUZZER_STATE_IDLE = 0,
++  BUZZER_STATE_BOOT_ON,
++  BUZZER_STATE_LINK_ON,
++  BUZZER_STATE_ARMED_ON_1,
++  BUZZER_STATE_ARMED_GAP,
++  BUZZER_STATE_ARMED_ON_2
++} BuzzerState;
+ 
+ /* USER CODE END PTD */
+ 
+@@ -63,6 +72,17 @@
+ 
+ #define DEBUG_UART_PERIOD_MS         100U
+ #define DEBUG_UART_HEADER_INTERVAL   50U
++
++/* Board Type C onboard passive buzzer: TIM4_CH3 on PD14, rated at 4 kHz. */
++#define BUZZER_TIMER_PRESCALER        83U
++#define BUZZER_TIMER_PERIOD           249U
++#define BUZZER_TIMER_PULSE            125U
++#define BUZZER_BOOT_BEEP_MS           250U
++#define BUZZER_SHORT_BEEP_MS          100U
++#define BUZZER_BEEP_GAP_MS            100U
++#define BUZZER_EVENT_BOOT             0x01U
++#define BUZZER_EVENT_LINK             0x02U
++#define BUZZER_EVENT_ARMED            0x04U
+ /* USER CODE END PD */
+ 
+ /* Private macro -------------------------------------------------------------*/
+@@ -138,6 +158,13 @@ volatile uint8_t left_encoder_previous_state = 0U;
+ 
+ static char debug_uart_buffer[192];
+ static uint8_t debug_uart_header_countdown = 0U;
++
++static TIM_HandleTypeDef buzzer_timer;
++static BuzzerState buzzer_state = BUZZER_STATE_IDLE;
++static uint32_t buzzer_state_deadline = 0U;
++static uint8_t buzzer_pending_events = 0U;
++static uint8_t buzzer_previous_link_ok = 0U;
++static uint8_t buzzer_previous_armed = 0U;
+ /* USER CODE END PV */
+ 
+ /* Private function prototypes -----------------------------------------------*/
+@@ -160,10 +187,148 @@ static void left_encoder_init(void);
+ static void left_encoder_update_from_edge(void);
+ static void left_encoder_update_speed(void);
+ static void debug_uart_send_snapshot(void);
++static void buzzer_init(void);
++static void buzzer_set_output(uint8_t enabled);
++static void buzzer_request_event(uint8_t event);
++static void buzzer_update(uint32_t now);
++static void buzzer_detect_drive_events(void);
+ /* USER CODE END PFP */
+ 
+ /* Private user code ---------------------------------------------------------*/
+ /* USER CODE BEGIN 0 */
++static void buzzer_init(void)
++{
++  GPIO_InitTypeDef gpio_init = {0};
++  TIM_OC_InitTypeDef pwm_config = {0};
++
++  /* TIM4 is on APB1.  The 84 MHz timer clock is divided to 1 MHz, then 4 kHz. */
++  __HAL_RCC_TIM4_CLK_ENABLE();
++  __HAL_RCC_GPIOD_CLK_ENABLE();
++
++  gpio_init.Pin = GPIO_PIN_14;
++  gpio_init.Mode = GPIO_MODE_AF_PP;
++  gpio_init.Pull = GPIO_NOPULL;
++  gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
++  gpio_init.Alternate = GPIO_AF2_TIM4;
++  HAL_GPIO_Init(GPIOD, &gpio_init);
++
++  buzzer_timer.Instance = TIM4;
++  buzzer_timer.Init.Prescaler = BUZZER_TIMER_PRESCALER;
++  buzzer_timer.Init.CounterMode = TIM_COUNTERMODE_UP;
++  buzzer_timer.Init.Period = BUZZER_TIMER_PERIOD;
++  buzzer_timer.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
++  buzzer_timer.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
++  if (HAL_TIM_PWM_Init(&buzzer_timer) != HAL_OK)
++  {
++    Error_Handler();
++  }
++
++  pwm_config.OCMode = TIM_OCMODE_PWM1;
++  pwm_config.Pulse = 0U;
++  pwm_config.OCPolarity = TIM_OCPOLARITY_HIGH;
++  pwm_config.OCFastMode = TIM_OCFAST_DISABLE;
++  if (HAL_TIM_PWM_ConfigChannel(&buzzer_timer,
++                                &pwm_config,
++                                TIM_CHANNEL_3) != HAL_OK)
++  {
++    Error_Handler();
++  }
++
++  if (HAL_TIM_PWM_Start(&buzzer_timer, TIM_CHANNEL_3) != HAL_OK)
++  {
++    Error_Handler();
++  }
++
++  buzzer_set_output(0U);
++}
++
++static void buzzer_set_output(uint8_t enabled)
++{
++  __HAL_TIM_SET_COMPARE(&buzzer_timer,
++                        TIM_CHANNEL_3,
++                        (enabled != 0U) ? BUZZER_TIMER_PULSE : 0U);
++}
++
++static void buzzer_request_event(uint8_t event)
++{
++  buzzer_pending_events |= event;
++}
++
++static void buzzer_update(uint32_t now)
++{
++  if (buzzer_state == BUZZER_STATE_IDLE)
++  {
++    if ((buzzer_pending_events & BUZZER_EVENT_BOOT) != 0U)
++    {
++      buzzer_pending_events &= (uint8_t)~BUZZER_EVENT_BOOT;
++      buzzer_set_output(1U);
++      buzzer_state = BUZZER_STATE_BOOT_ON;
++      buzzer_state_deadline = now + BUZZER_BOOT_BEEP_MS;
++    }
++    else if ((buzzer_pending_events & BUZZER_EVENT_LINK) != 0U)
++    {
++      buzzer_pending_events &= (uint8_t)~BUZZER_EVENT_LINK;
++      buzzer_set_output(1U);
++      buzzer_state = BUZZER_STATE_LINK_ON;
++      buzzer_state_deadline = now + BUZZER_SHORT_BEEP_MS;
++    }
++    else if ((buzzer_pending_events & BUZZER_EVENT_ARMED) != 0U)
++    {
++      buzzer_pending_events &= (uint8_t)~BUZZER_EVENT_ARMED;
++      buzzer_set_output(1U);
++      buzzer_state = BUZZER_STATE_ARMED_ON_1;
++      buzzer_state_deadline = now + BUZZER_SHORT_BEEP_MS;
++    }
++    return;
++  }
++
++  if ((int32_t)(now - buzzer_state_deadline) < 0)
++  {
++    return;
++  }
++
++  switch (buzzer_state)
++  {
++    case BUZZER_STATE_BOOT_ON:
++    case BUZZER_STATE_LINK_ON:
++      buzzer_set_output(0U);
++      buzzer_state = BUZZER_STATE_IDLE;
++      break;
++
++    case BUZZER_STATE_ARMED_ON_1:
++      buzzer_set_output(0U);
++      buzzer_state = BUZZER_STATE_ARMED_GAP;
++      buzzer_state_deadline = now + BUZZER_BEEP_GAP_MS;
++      break;
++
++    case BUZZER_STATE_ARMED_GAP:
++      buzzer_set_output(1U);
++      buzzer_state = BUZZER_STATE_ARMED_ON_2;
++      buzzer_state_deadline = now + BUZZER_SHORT_BEEP_MS;
++      break;
++
++    case BUZZER_STATE_ARMED_ON_2:
++    default:
++      buzzer_set_output(0U);
++      buzzer_state = BUZZER_STATE_IDLE;
++      break;
++  }
++}
++
++static void buzzer_detect_drive_events(void)
++{
++  if ((drive_link_ok != 0U) && (buzzer_previous_link_ok == 0U))
++  {
++    buzzer_request_event(BUZZER_EVENT_LINK);
++  }
++  if ((drive_armed != 0U) && (buzzer_previous_armed == 0U))
++  {
++    buzzer_request_event(BUZZER_EVENT_ARMED);
++  }
++
++  buzzer_previous_link_ok = drive_link_ok;
++  buzzer_previous_armed = drive_armed;
++}
+ static HAL_StatusTypeDef wbus_start_receive(void)
+ {
+   HAL_StatusTypeDef status;
+@@ -757,6 +922,10 @@ int main(void)
+ 
+   left_encoder_init();
+ 
++  buzzer_init();
++  buzzer_request_event(BUZZER_EVENT_BOOT);
++  buzzer_update(HAL_GetTick());
++
+   if (wbus_start_receive() != HAL_OK)
+   {
+     Error_Handler();
+@@ -800,8 +969,11 @@ int main(void)
+       drive_last_control_tick += DRIVE_CONTROL_PERIOD_MS;
+ 
+       drive_control_update();
++      buzzer_detect_drive_events();
+     }
+ 
++    buzzer_update(HAL_GetTick());
++
+     if ((HAL_GetTick() - encoder_last_speed_tick) >=
+         ENCODER_SPEED_SAMPLE_MS)
+     {

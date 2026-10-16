@@ -5,12 +5,12 @@
       "label": "STM32: Configure Debug",
       "type": "process",
       "command": "cmake",
-      "args": ["--preset", "Debug"],
+      "args": [
+        "--preset",
+        "Debug"
+      ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "PATH": "C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\cmake\\4.3.1+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\ninja\\1.13.2+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\gnu-tools-for-stm32\\14.3.1+st.2\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\programmer\\2.22.0+st.1\\bin;${env:PATH}"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
@@ -18,15 +18,22 @@
       "label": "STM32: Build Debug",
       "type": "process",
       "command": "cmake",
-      "args": ["--build", "--preset", "Debug"],
+      "args": [
+        "--build",
+        "--preset",
+        "Debug"
+      ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "PATH": "C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\cmake\\4.3.1+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\ninja\\1.13.2+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\gnu-tools-for-stm32\\14.3.1+st.2\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\programmer\\2.22.0+st.1\\bin;${env:PATH}"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "dependsOn": "STM32: Configure Debug",
-      "problemMatcher": ["$gcc"]
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
     },
     {
       "label": "STM32: Flash with ST-Link",
@@ -35,17 +42,16 @@
       "args": [
         "-c",
         "port=SWD",
-        "freq=4000",
+        "mode=UR",
+        "reset=HWrst",
+        "freq=1000",
         "-w",
         "build/Debug/rf206s_motor_test.elf",
         "-v",
         "-rst"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "PATH": "C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\cmake\\4.3.1+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\ninja\\1.13.2+st.1\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\gnu-tools-for-stm32\\14.3.1+st.2\\bin;C:\\Users\\Yhn\\AppData\\Local\\STM32Cube\\bundles\\programmer\\2.22.0+st.1\\bin;${env:PATH}"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "dependsOn": "STM32: Build Debug",
       "problemMatcher": []

@@ -6,3 +6,4 @@ mx.scratch
 *.log
 Thumbs.db
 .DS_Store
+CMakeUserPresets.json

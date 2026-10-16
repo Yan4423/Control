@@ -105,10 +105,10 @@ $form.MinimumSize = New-Object System.Drawing.Size(996, 739)
 $title = New-TextLabel "RF206S / Motor Live Monitor" 20 12 500 38 18 $true
 $form.Controls.Add($title)
 
-$connectionLabel = New-TextLabel "CONNECTED: $PortName" 755 18 200 28 10 $true
+$connectionLabel = New-TextLabel "WAITING FOR DATA: $PortName" 755 18 200 28 10 $true
 $connectionLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-$connectionLabel.BackColor = [System.Drawing.Color]::FromArgb(198, 239, 206)
-$connectionLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 97, 0)
+$connectionLabel.BackColor = [System.Drawing.Color]::FromArgb(255, 235, 156)
+$connectionLabel.ForeColor = [System.Drawing.Color]::FromArgb(156, 101, 0)
 $form.Controls.Add($connectionLabel)
 
 $linkState = New-TextLabel "LINK" 20 64 100 34 11 $true
@@ -127,7 +127,7 @@ $timeLabel = New-TextLabel "Board time: -- ms" 770 66 190 30 10 $false
 $form.Controls.Add($timeLabel)
 
 $commandLabel = New-TextLabel "Command: T=--  L=--  R=--" 20 108 300 30 10 $true
-$pwmLabel = New-TextLabel "PWM: C1=-- C2=-- C3=-- C4=--" 320 108 380 30 10 $true
+$pwmLabel = New-TextLabel "PWM: C3=-- C4=-- C5=-- C6=--" 320 108 380 30 10 $true
 $encoderLabel = New-TextLabel "Left encoder: pos=-- cps=-- invalid=--" 700 108 270 30 9 $true
 $form.Controls.Add($commandLabel)
 $form.Controls.Add($pwmLabel)
@@ -148,21 +148,29 @@ $chart.Size = New-Object System.Drawing.Size(930, 300)
 $chart.BackColor = [System.Drawing.Color]::White
 $commandArea = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea
 $commandArea.Name = "Commands"
-$commandArea.AxisX.Title = "Last 20 seconds"
-$commandArea.AxisY.Title = "Command / PWM counts"
+$commandArea.AxisX.Title = "Board time (seconds), last 20 s"
+$commandArea.AxisY.Title = "Electrical command (-1000..1000)"
 $commandArea.AxisY.Minimum = -1100
 $commandArea.AxisY.Maximum = 1100
+$commandArea.AxisY2.Enabled = [System.Windows.Forms.DataVisualization.Charting.AxisEnabled]::True
+$commandArea.AxisY2.Title = "PWM counts (8400 = 100%)"
+$commandArea.AxisY2.Minimum = 0
+$commandArea.AxisY2.Maximum = 8400
+$commandArea.AxisY2.MajorGrid.Enabled = $false
 $commandArea.AxisX.MajorGrid.Enabled = $false
 $commandArea.AxisY.MajorGrid.LineColor = [System.Drawing.Color]::Gainsboro
 $chart.ChartAreas.Add($commandArea)
 $chart.Legends.Add((New-Object System.Windows.Forms.DataVisualization.Charting.Legend))
 $throttleSeries = Add-LineSeries $chart "Throttle command" ([System.Drawing.Color]::RoyalBlue) "Commands"
-$leftSeries = Add-LineSeries $chart "Left command" ([System.Drawing.Color]::DarkViolet) "Commands"
-$rightSeries = Add-LineSeries $chart "Right command" ([System.Drawing.Color]::DeepPink) "Commands"
-$rpwmSeries = Add-LineSeries $chart "Left C1" ([System.Drawing.Color]::ForestGreen) "Commands"
-$lpwmSeries = Add-LineSeries $chart "Left C2" ([System.Drawing.Color]::DarkOrange) "Commands"
-$rightRpwmSeries = Add-LineSeries $chart "Right C3" ([System.Drawing.Color]::Teal) "Commands"
-$rightLpwmSeries = Add-LineSeries $chart "Right C4" ([System.Drawing.Color]::Sienna) "Commands"
+$leftSeries = Add-LineSeries $chart "Left electric cmd" ([System.Drawing.Color]::DarkViolet) "Commands"
+$rightSeries = Add-LineSeries $chart "Right electric cmd" ([System.Drawing.Color]::DeepPink) "Commands"
+$rpwmSeries = Add-LineSeries $chart "Left C3" ([System.Drawing.Color]::ForestGreen) "Commands"
+$lpwmSeries = Add-LineSeries $chart "Left C4" ([System.Drawing.Color]::DarkOrange) "Commands"
+$rightRpwmSeries = Add-LineSeries $chart "Right C5" ([System.Drawing.Color]::Teal) "Commands"
+$rightLpwmSeries = Add-LineSeries $chart "Right C6" ([System.Drawing.Color]::Sienna) "Commands"
+foreach ($series in @($rpwmSeries, $lpwmSeries, $rightRpwmSeries, $rightLpwmSeries)) {
+    $series.YAxisType = [System.Windows.Forms.DataVisualization.Charting.AxisType]::Secondary
+}
 $form.Controls.Add($chart)
 
 $speedChart = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
@@ -171,7 +179,7 @@ $speedChart.Size = New-Object System.Drawing.Size(930, 165)
 $speedChart.BackColor = [System.Drawing.Color]::White
 $speedArea = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea
 $speedArea.Name = "Encoder"
-$speedArea.AxisX.Title = "Last 20 seconds"
+$speedArea.AxisX.Title = "Board time (seconds), last 20 s"
 $speedArea.AxisY.Title = "Encoder counts / second"
 $speedArea.AxisX.MajorGrid.Enabled = $false
 $speedArea.AxisY.MajorGrid.LineColor = [System.Drawing.Color]::Gainsboro
@@ -180,11 +188,12 @@ $speedChart.Legends.Add((New-Object System.Windows.Forms.DataVisualization.Chart
 $speedSeries = Add-LineSeries $speedChart "Encoder CPS" ([System.Drawing.Color]::Crimson) "Encoder"
 $form.Controls.Add($speedChart)
 
-$footer = New-TextLabel "Fields: input -> safety state -> command -> TIM1 PWM -> encoder feedback" 20 669 700 24 9 $false
+$footer = New-TextLabel "Input -> safety -> TIM1 C3/C4 + TIM8 C5/C6 -> left encoder (register telemetry)" 20 669 900 24 9 $false
 $form.Controls.Add($footer)
 
 $script:receiveBuffer = ""
 $script:sampleNumber = 0
+$script:lastBoardMilliseconds = -1L
 $script:lastValidSampleAt = [DateTime]::Now
 
 $timer = New-Object System.Windows.Forms.Timer
@@ -208,6 +217,15 @@ $timer.Add_Tick({
                     $script:lastValidSampleAt = [DateTime]::Now
                     $script:sampleNumber++
 
+                    # A board reset/tick rollover starts a new plot history.
+                    if ($value[0] -lt $script:lastBoardMilliseconds) {
+                        foreach ($series in @($throttleSeries, $leftSeries, $rightSeries, $rpwmSeries, $lpwmSeries, $rightRpwmSeries, $rightLpwmSeries, $speedSeries)) {
+                            $series.Points.Clear()
+                        }
+                    }
+                    $script:lastBoardMilliseconds = $value[0]
+                    $boardSeconds = $value[0] / 1000.0
+
                     $rightCommand = if ($value.Length -ge 17) { $value[14] } else { 0 }
                     $rightRpwm = if ($value.Length -ge 17) { $value[15] } else { 0 }
                     $rightLpwm = if ($value.Length -ge 17) { $value[16] } else { 0 }
@@ -215,7 +233,7 @@ $timer.Add_Tick({
                     $timeLabel.Text = "Board time: $($value[0]) ms"
                     $rawLabel.Text = "Raw: throttle=$($value[1])  turn=$($value[2])  SA=$($value[3])"
                     $commandLabel.Text = "Command: T=$($value[7])  L=$($value[8])  R=$rightCommand"
-                    $pwmLabel.Text = "PWM: C1=$($value[9]) C2=$($value[10]) C3=$rightRpwm C4=$rightLpwm"
+                    $pwmLabel.Text = "PWM: C3=$($value[9]) C4=$($value[10]) C5=$rightRpwm C6=$rightLpwm"
                     $encoderLabel.Text = "Left encoder: pos=$($value[11]) cps=$($value[12]) invalid=$($value[13])"
 
                     $throttleValue = [Math]::Max(0, [Math]::Min(2047, [int]$value[1]))
@@ -237,14 +255,19 @@ $timer.Add_Tick({
                         }
                     }
 
-                    [void]$throttleSeries.Points.AddXY($script:sampleNumber, $value[7])
-                    [void]$leftSeries.Points.AddXY($script:sampleNumber, $value[8])
-                    [void]$rightSeries.Points.AddXY($script:sampleNumber, $rightCommand)
-                    [void]$rpwmSeries.Points.AddXY($script:sampleNumber, $value[9])
-                    [void]$lpwmSeries.Points.AddXY($script:sampleNumber, $value[10])
-                    [void]$rightRpwmSeries.Points.AddXY($script:sampleNumber, $rightRpwm)
-                    [void]$rightLpwmSeries.Points.AddXY($script:sampleNumber, $rightLpwm)
-                    [void]$speedSeries.Points.AddXY($script:sampleNumber, $value[12])
+                    [void]$throttleSeries.Points.AddXY($boardSeconds, $value[7])
+                    [void]$leftSeries.Points.AddXY($boardSeconds, $value[8])
+                    [void]$rightSeries.Points.AddXY($boardSeconds, $rightCommand)
+                    [void]$rpwmSeries.Points.AddXY($boardSeconds, $value[9])
+                    [void]$lpwmSeries.Points.AddXY($boardSeconds, $value[10])
+                    [void]$rightRpwmSeries.Points.AddXY($boardSeconds, $rightRpwm)
+                    [void]$rightLpwmSeries.Points.AddXY($boardSeconds, $rightLpwm)
+                    [void]$speedSeries.Points.AddXY($boardSeconds, $value[12])
+
+                    foreach ($area in @($commandArea, $speedArea)) {
+                        $area.AxisX.Minimum = [Math]::Max(0, $boardSeconds - 20)
+                        $area.AxisX.Maximum = $boardSeconds + 0.1
+                    }
 
                     foreach ($series in @($throttleSeries, $leftSeries, $rightSeries, $rpwmSeries, $lpwmSeries, $rightRpwmSeries, $rightLpwmSeries, $speedSeries)) {
                         while ($series.Points.Count -gt 200) {
@@ -259,6 +282,10 @@ $timer.Add_Tick({
             $connectionLabel.Text = "WAITING FOR DATA: $PortName"
             $connectionLabel.BackColor = [System.Drawing.Color]::FromArgb(255, 235, 156)
             $connectionLabel.ForeColor = [System.Drawing.Color]::FromArgb(156, 101, 0)
+            foreach ($stateLabel in @($linkState, $enableState, $armedState)) {
+                $stateLabel.BackColor = [System.Drawing.Color]::LightGray
+                $stateLabel.ForeColor = [System.Drawing.Color]::Black
+            }
         }
         else {
             $connectionLabel.Text = "CONNECTED: $PortName"
