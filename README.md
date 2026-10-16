@@ -2,16 +2,15 @@
 
 RoboMaster 开发板 C 型（STM32F407IGHx）通过 RF206S / W.BUS 接收遥控指令，以两组 PWM 控制 BTS7960 双履带电机。仓库所有者与原项目作者为 **[Yan4423](https://github.com/Yan4423)**；本次交接保留所有权、管理权限和原提交历史。
 
-> 接手从 [交接说明](docs/HANDOVER.md) 开始。本仓库交付的是可构建的实验固件，不等于整车验收记录。当前板内固件版本需要接手人重新核验。
+> 本仓库提供可构建的实验固件，不等于整车验收记录。当前板内固件版本需要接手人重新核验。
 
 ## 给接手人的阅读顺序
 
-1. [交接说明与验收表](docs/HANDOVER.md)：项目做到哪里、还缺什么、如何接管。
-2. [接线与接口](docs/WIRING.md)：C3–C6、W.BUS、串口、编码器与供电。
-3. [编译和烧录](docs/BUILD_AND_FLASH.md)：从全新电脑克隆开始，不依赖原作者的磁盘路径。
-4. [遥控操作与排障](docs/OPERATION.md)：解锁、试车、仪表、常见故障。
-5. [代码地图与维护](docs/DEVELOPMENT.md)：参数、控制流程、CubeMX注意事项、后续工作。
-6. [串口数据协议](docs/TELEMETRY.md)、[作者与仓库权限](AUTHORS.md)、[第三方来源](THIRD_PARTY_NOTICES.md)。
+1. [接线与接口](docs/WIRING.md)：C3–C6、W.BUS、串口、编码器与供电。
+2. [编译和烧录](docs/BUILD_AND_FLASH.md)：从全新电脑克隆开始，不依赖原作者的磁盘路径。
+3. [遥控操作与排障](docs/OPERATION.md)：解锁、试车、仪表、常见故障。
+4. [代码地图与维护](docs/DEVELOPMENT.md)：参数、控制流程、CubeMX注意事项、后续工作。
+5. [串口数据协议](docs/TELEMETRY.md)、[作者与仓库权限](AUTHORS.md)、[第三方来源](THIRD_PARTY_NOTICES.md)。
 
 ## 当前主线行为
 
@@ -46,7 +45,7 @@ powershell.exe -NoProfile -File tools/check_environment.ps1
 - 保留首次提交 `d037e80` 的遥控算法、约2秒渐变与电机极性。
 - 修正串口仪表的C3–C6标记、PWM纵轴与时间轴；去除IDE中原电脑的固定路径。
 - 原工作目录中未提交的蜂鸣器功能保存在 [待合并补丁](archive/local-unmerged/README.md)，没有自动并入主线。
-- [本次构建验证](docs/VALIDATION.md) 记录编译器版本、输出校验值和验证边界；实机验收项保留待填写状态。
+- [本次构建验证](docs/VALIDATION.md) 记录编译器版本、输出校验值和验证边界；本次未进行实机验收。
 
 ## 目录
 
